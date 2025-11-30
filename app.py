@@ -2,15 +2,13 @@ import streamlit as st
 import networkx as nx
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from pyvis.network import Network
 import tempfile
-import os
 
 st.set_page_config(page_title="Real-Time Social Network Analyzer", layout="wide")
 
 st.title("🕸️ Real-Time Social Network Analyzer & Structural Pattern Simulator")
-st.write("Build and analyze social networks using pure graph theory — no datasets, no ML models.")
+st.write("Build and analyze social networks using pure graph theory — no datasets, no machine learning models.")
 
 # -----------------------------------
 # Initialize Graph
@@ -61,24 +59,25 @@ if st.sidebar.button("Add Relationship"):
             G.add_edge(target, source, weight=weight, sign=s_val)
         st.sidebar.success("Relationship added.")
     else:
-        st.sidebar.error("Invalid source/target selection.")
+        st.sidebar.error("Invalid selection.")
 
 # -----------------------------------
-# Graph Visualization (FIXED VERSION)
+# Graph Visualization (PyVis FIX → using write_html instead of show)
 # -----------------------------------
 st.subheader("📌 Network Visualization")
 
 net = Network(height="500px", width="100%", directed=True)
 net.from_nx(G)
 
-with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
-    html_path = tmp_file.name
-    net.show(html_path)
+with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
+    html_path = tmp.name
+
+net.write_html(html_path)
 
 with open(html_path, "r", encoding="utf-8") as f:
     html_content = f.read()
 
-st.components.v1.html(html_content, height=500, scrolling=True)
+st.components.v1.html(html_content, height=550, scrolling=True)
 
 # -----------------------------------
 # Adjacency Matrix
@@ -101,11 +100,10 @@ if len(G.nodes) > 0:
         "Betweenness": nx.betweenness_centrality(G),
         "Eigenvector": nx.eigenvector_centrality_numpy(G) if len(G) > 1 else {n: 0 for n in G.nodes}
     })
-
     st.dataframe(centrality_df)
 
 # -----------------------------------
-# Structural Equivalence (Correlation Matrix)
+# Structural Equivalence Matrix
 # -----------------------------------
 st.subheader("🔍 Structural Equivalence Matrix")
 
@@ -142,12 +140,12 @@ if len(G.nodes) >= 3 and nx.is_directed(G):
     triad = nx.triadic_census(G)
     st.json(triad)
 else:
-    st.info("Triad census works only for directed graphs with ≥ 3 nodes.")
+    st.info("Add ≥ 3 nodes for triad analysis.")
 
 # -----------------------------------
 # Structural Balance Test
 # -----------------------------------
-st.subheader("⚖️ Structural Balance Test (Signed Graph)")
+st.subheader("⚖️ Structural Balance (Signed Graphs)")
 
 balanced = True
 for triangle in nx.cycle_basis(G.to_undirected()):
@@ -170,12 +168,12 @@ st.subheader("🧩 Simple Block Model (Degree-Based Groups)")
 degrees = dict(G.degree())
 groups = {"High-Degree": [], "Low-Degree": []}
 
-threshold = np.mean(list(degrees.values())) if degrees else 0
-
-for node, deg in degrees.items():
-    if deg >= threshold:
-        groups["High-Degree"].append(node)
-    else:
-        groups["Low-Degree"].append(node)
+if degrees:
+    threshold = np.mean(list(degrees.values()))
+    for node, deg in degrees.items():
+        if deg >= threshold:
+            groups["High-Degree"].append(node)
+        else:
+            groups["Low-Degree"].append(node)
 
 st.write(groups)
