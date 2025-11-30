@@ -10,21 +10,22 @@ import os
 st.set_page_config(page_title="Real-Time Social Network Analyzer", layout="wide")
 
 st.title("🕸️ Real-Time Social Network Analyzer & Structural Pattern Simulator")
-st.write("Create and analyze social networks using pure graph theory — no datasets, no ML models.")
+st.write("Build and analyze social networks using pure graph theory — no datasets, no ML models.")
 
-# -----------------------------
-# Graph Initialization
-# -----------------------------
+# -----------------------------------
+# Initialize Graph
+# -----------------------------------
 if "G" not in st.session_state:
     st.session_state.G = nx.DiGraph()
 
 G = st.session_state.G
 
-# -----------------------------
+# -----------------------------------
 # Sidebar: Add Nodes
-# -----------------------------
+# -----------------------------------
 st.sidebar.header("Add Actor (Node)")
 node = st.sidebar.text_input("Actor Name")
+
 if st.sidebar.button("Add Actor"):
     if node and node not in G.nodes:
         G.add_node(node)
@@ -32,15 +33,15 @@ if st.sidebar.button("Add Actor"):
     else:
         st.sidebar.error("Invalid or duplicate actor name.")
 
-# -----------------------------
+# -----------------------------------
 # Sidebar: Add Edges
-# -----------------------------
+# -----------------------------------
 st.sidebar.header("Add Relationship (Edge)")
 
 source = st.sidebar.selectbox("Source Actor", [""] + list(G.nodes))
 target = st.sidebar.selectbox("Target Actor", [""] + list(G.nodes))
 
-weight = st.sidebar.number_input("Weight (0 = Neutral)", value=1.0)
+weight = st.sidebar.number_input("Weight", value=1.0)
 sign = st.sidebar.selectbox("Sign", ["Positive (+)", "Negative (-)", "Neutral (0)"])
 directed = st.sidebar.checkbox("Directed Edge?", value=True)
 
@@ -60,32 +61,37 @@ if st.sidebar.button("Add Relationship"):
             G.add_edge(target, source, weight=weight, sign=s_val)
         st.sidebar.success("Relationship added.")
     else:
-        st.sidebar.error("Invalid source/target.")
+        st.sidebar.error("Invalid source/target selection.")
 
-# -----------------------------
-# Graph Visualization
-# -----------------------------
+# -----------------------------------
+# Graph Visualization (FIXED VERSION)
+# -----------------------------------
 st.subheader("📌 Network Visualization")
 
-with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-    net = Network(height="500px", width="100%", directed=True)
-    net.from_nx(G)
-    net.show(tmp_file.name)
+net = Network(height="500px", width="100%", directed=True)
+net.from_nx(G)
 
-html_content = open(tmp_file.name, 'r').read()
-st.components.v1.html(html_content, height=500)
+with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
+    html_path = tmp_file.name
+    net.show(html_path)
 
-# -----------------------------
+with open(html_path, "r", encoding="utf-8") as f:
+    html_content = f.read()
+
+st.components.v1.html(html_content, height=500, scrolling=True)
+
+# -----------------------------------
 # Adjacency Matrix
-# -----------------------------
+# -----------------------------------
 st.subheader("📊 Adjacency Matrix")
+
 if G.nodes:
     adj_df = nx.to_pandas_adjacency(G, dtype=int)
     st.dataframe(adj_df)
 
-# -----------------------------
+# -----------------------------------
 # Centrality Measures
-# -----------------------------
+# -----------------------------------
 st.subheader("📈 Centrality Measures")
 
 if len(G.nodes) > 0:
@@ -98,9 +104,9 @@ if len(G.nodes) > 0:
 
     st.dataframe(centrality_df)
 
-# -----------------------------
-# Structural Equivalence
-# -----------------------------
+# -----------------------------------
+# Structural Equivalence (Correlation Matrix)
+# -----------------------------------
 st.subheader("🔍 Structural Equivalence Matrix")
 
 if len(G.nodes) > 1:
@@ -109,32 +115,38 @@ if len(G.nodes) > 1:
     sim_df = pd.DataFrame(sim, index=G.nodes, columns=G.nodes)
     st.dataframe(sim_df)
 
-# -----------------------------
+# -----------------------------------
 # Dyad Census
-# -----------------------------
+# -----------------------------------
 st.subheader("👥 Dyad Census")
 
-dyad = nx.algorithms.dag.dag_longest_path_length if nx.is_directed(G) else None
-mutual = sum(1 for u, v in G.edges if G.has_edge(v, u))
-asym = len(G.edges) - mutual
+if nx.is_directed(G):
+    mutual = sum(1 for u, v in G.edges if G.has_edge(v, u))
+    asym = len(G.edges) - mutual
+else:
+    mutual = 0
+    asym = len(G.edges)
+
 null_dyads = len(G.nodes) * (len(G.nodes) - 1) - (mutual + asym)
 
 st.write(f"**Mutual Dyads:** {mutual}")
 st.write(f"**Asymmetric Dyads:** {asym}")
 st.write(f"**Null Dyads:** {null_dyads}")
 
-# -----------------------------
+# -----------------------------------
 # Triad Census
-# -----------------------------
+# -----------------------------------
 st.subheader("🔺 Triad Census")
 
-if len(G.nodes) >= 3:
+if len(G.nodes) >= 3 and nx.is_directed(G):
     triad = nx.triadic_census(G)
     st.json(triad)
+else:
+    st.info("Triad census works only for directed graphs with ≥ 3 nodes.")
 
-# -----------------------------
+# -----------------------------------
 # Structural Balance Test
-# -----------------------------
+# -----------------------------------
 st.subheader("⚖️ Structural Balance Test (Signed Graph)")
 
 balanced = True
@@ -150,13 +162,14 @@ for triangle in nx.cycle_basis(G.to_undirected()):
 
 st.write("**Balanced:** ✔️ Yes" if balanced else "**Balanced:** ❌ No")
 
-# -----------------------------
-# Block Model Approximation
-# -----------------------------
-st.subheader("🧩 Simple Block Model (Grouping by Degree)")
+# -----------------------------------
+# Simple Block Model
+# -----------------------------------
+st.subheader("🧩 Simple Block Model (Degree-Based Groups)")
 
 degrees = dict(G.degree())
 groups = {"High-Degree": [], "Low-Degree": []}
+
 threshold = np.mean(list(degrees.values())) if degrees else 0
 
 for node, deg in degrees.items():
